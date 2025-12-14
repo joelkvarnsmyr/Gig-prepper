@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { createTool } from './index';
 import { UniversalMix } from '@/lib/models/universal-mix';
 import { YamahaAdapter } from '@/lib/adapters/yamaha';
+import { X32Adapter } from '@/lib/adapters/x32';
 
 // Input schema
 const GenerateFilesInputSchema = z.object({
@@ -31,19 +32,19 @@ export const generateFilesTool = createTool({
   name: 'generate_files',
   description: `Genererar konsol-specifika setup-filer från UniversalMix.
 
+STÖDD UTRUSTNING:
+
 För Yamaha (CL/QL/TF):
 - CSV-filer för USB-import: InName, InPatch, OutPatch, etc.
 - MD-dokumentation för inställningar som inte kan importeras (EQ, dynamik, effekter)
+- OBS: Yamaha CSV kan ENDAST importera namn, färger, patching och DCA-namn
 
-Returnerar en lista med filer redo för nedladdning som ZIP.
+För Behringer X32 / Midas M32:
+- .scn scene-fil för USB-import
+- Komplett konfiguration inkl. EQ, dynamik, effekter, routing
+- Inga manuella inställningar behövs
 
-VIKTIGT: Yamaha CSV kan ENDAST importera:
-- Kanalnamn och färger
-- Input/output patching
-- DCA-namn
-
-EQ, kompressorer, gate och effekter måste ställas in manuellt -
-dessa genereras som detaljerad MD-dokumentation.`,
+Returnerar en lista med filer redo för nedladdning som ZIP.`,
 
   schema: GenerateFilesInputSchema,
 
@@ -92,12 +93,26 @@ dessa genereras som detaljerad MD-dokumentation.`,
           break;
         }
 
-        case 'x32-scene':
-          return JSON.stringify({
-            success: false,
-            error: 'X32/M32 adapter not yet implemented. Coming soon!',
-            supportedFormats: ['yamaha-csv'],
-          });
+        case 'x32-scene': {
+          const x32Adapter = new X32Adapter();
+          const x32Files = x32Adapter.generate(mix);
+
+          for (const file of x32Files) {
+            // Filter documentation if not requested
+            if (!includeDocumentation && file.name.endsWith('.md')) {
+              continue;
+            }
+
+            files.push({
+              name: file.name,
+              type: file.name.endsWith('.scn') ? 'scn' : 'md',
+              content: file.content,
+              size: file.content.length,
+              description: getFileDescription(file.name),
+            });
+          }
+          break;
+        }
 
         case 'dlive-show':
           return JSON.stringify({
@@ -116,6 +131,7 @@ dessa genereras som detaljerad MD-dokumentation.`,
 
       // Categorize files
       const csvFiles = files.filter((f) => f.type === 'csv');
+      const scnFiles = files.filter((f) => f.type === 'scn');
       const mdFiles = files.filter((f) => f.type === 'md');
 
       return JSON.stringify({
@@ -123,6 +139,7 @@ dessa genereras som detaljerad MD-dokumentation.`,
         format,
         totalFiles: files.length,
         csvFiles: csvFiles.length,
+        sceneFiles: scnFiles.length,
         documentationFiles: mdFiles.length,
         files: files.map((f) => ({
           name: f.name,
@@ -150,6 +167,7 @@ dessa genereras som detaljerad MD-dokumentation.`,
  */
 function getFileDescription(filename: string): string {
   const descriptions: Record<string, string> = {
+    // Yamaha CSV files
     'InName.csv': 'Kanalnamn, färger och ikoner för input-kanaler',
     'InPatch.csv': 'Input patching (vilken fysisk ingång till vilken kanal)',
     'OutPatch.csv': 'Output patching (vilken buss till vilken fysisk utgång)',
@@ -159,6 +177,7 @@ function getFileDescription(filename: string): string {
     'DCAName.csv': 'Namn på DCA-grupper',
     'StName.csv': 'Namn på stereo-kanaler',
     'StMonoName.csv': 'Namn på stereo-till-mono-kanaler',
+    // Documentation files
     'README.md': 'Översikt och snabbstart-guide',
     'MASTER.md': 'Komplett setup-dokumentation',
     'GainSheet.md': 'Föreslagna gain-värden per kanal',
@@ -169,6 +188,11 @@ function getFileDescription(filename: string): string {
     'Premium_Rack.md': 'Premium Rack-inställningar (Yamaha)',
     'Monitor_Guide.md': 'Monitor-mixar och routing',
   };
+
+  // X32 scene files (dynamic name based on gig)
+  if (filename.endsWith('.scn')) {
+    return 'X32/M32 Scene fil - komplett konsol-konfiguration';
+  }
 
   return descriptions[filename] || 'Setup file';
 }
@@ -193,7 +217,17 @@ function getImportInstructions(format: string): string[] {
       ];
 
     case 'x32-scene':
-      return ['X32 import instructions coming soon'];
+      return [
+        '1. Kopiera .scn-filen till ett USB-minne (FAT32-formaterat)',
+        '2. Sätt in USB-minnet i X32/M32',
+        '3. Tryck på UTILITY-knappen',
+        '4. Välj USB → LOAD → SCENE',
+        '5. Navigera till .scn-filen och välj den',
+        '6. Tryck LOAD och bekräfta',
+        '7. Verifiera inställningar och kör line check',
+        '',
+        'OBS: Scenen innehåller komplett konfiguration inkl. EQ, dynamik och effekter.',
+      ];
 
     case 'dlive-show':
       return ['dLive import instructions coming soon'];

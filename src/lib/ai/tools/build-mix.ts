@@ -113,9 +113,9 @@ function categorizeInstrument(name: string): { category: string; color: string; 
   if (/key|synth|org/i.test(lower)) return { category: 'keys', color: 'Cyan', icon: 'Keyboard' };
 
   // Vocals
-  if (/lead.*voc|sång|röst/i.test(lower)) return { category: 'vocals', color: 'Magenta', icon: 'Female' };
-  if (/back.*voc|kör|choir|kor/i.test(lower)) return { category: 'vocals', color: 'Purple', icon: 'Female' };
-  if (/voc|sång/i.test(lower)) return { category: 'vocals', color: 'Magenta', icon: 'Male' };
+  if (/lead.*vo[cx]|sång|röst/i.test(lower)) return { category: 'vocals', color: 'Magenta', icon: 'Female' };
+  if (/back.*vo[cx]|kör|choir|kor/i.test(lower)) return { category: 'vocals', color: 'Purple', icon: 'Female' };
+  if (/vo[cx]|sång|vocal/i.test(lower)) return { category: 'vocals', color: 'Magenta', icon: 'Male' };
 
   // Strings
   if (/violin|fiol|cello|viola/i.test(lower)) return { category: 'strings', color: 'Green', icon: 'Strings' };
