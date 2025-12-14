@@ -2,11 +2,13 @@
  * Yamaha CL/QL/TF Adapter
  *
  * Genererar CSV-filer för import via Yamaha CL/QL Editor.
- * Baserat på Yamaha's strikta CSV-format med headers.
+ * Baserat på beprövat format som fungerar med QL1.
  *
- * Begränsningar:
- * - CSV kan INTE sätta EQ, Gain, Faders eller Premium Rack
- * - Dessa genereras som PDF-dokumentation istället
+ * Format-krav:
+ * - [Information] header med modell och version
+ * - ASCII-kodning (ingen BOM)
+ * - Kanalnummer med underscore prefix (_01, _02, etc.)
+ * - Namn inom citattecken
  */
 
 import {
@@ -21,40 +23,108 @@ import {
 import {
   UniversalMix,
   Channel,
+  Bus,
+  DCA,
   ConsoleModel,
 } from '../../models/universal-mix';
 
 // ============================================================================
-// Yamaha Color Mapping
+// Yamaha Color Names (as used in CSV)
 // ============================================================================
 
-const YAMAHA_COLORS: Record<string, number> = {
-  off: 0,
-  red: 1,
-  green: 2,
-  yellow: 3,
-  blue: 4,
-  magenta: 5,
-  cyan: 6,
-  white: 7,
-  orange: 8,
-  pink: 1, // Map to red
-  purple: 5, // Map to magenta
-  lime: 2, // Map to green
+const YAMAHA_COLOR_NAMES: Record<string, string> = {
+  off: 'Black',
+  black: 'Black',
+  red: 'Red',
+  green: 'Green',
+  yellow: 'Yellow',
+  blue: 'Blue',
+  magenta: 'Magenta',
+  cyan: 'Cyan',
+  white: 'White',
+  orange: 'Orange',
+  pink: 'Magenta',
+  purple: 'Magenta',
+  lime: 'Green',
 };
 
 // ============================================================================
-// CSV Header Templates
+// Yamaha Icon Names
 // ============================================================================
 
-interface YamahaHeader {
-  model: string;
-  version: string;
-  tableType: string;
+const YAMAHA_ICONS: Record<string, string> = {
+  // Vocals
+  vocals: 'Female',
+  vocal: 'Female',
+  female: 'Female',
+  male: 'Male',
+  // Instruments
+  strings: 'Strings',
+  violin: 'Strings',
+  fiol: 'Strings',
+  guitar: 'A.Guitar',
+  'acoustic-guitar': 'A.Guitar',
+  'electric-guitar': 'E.Guitar',
+  bass: 'E.Bass',
+  keys: 'Keyboard',
+  keyboard: 'Keyboard',
+  piano: 'Piano',
+  drums: 'Drums',
+  kick: 'Kick',
+  snare: 'Snare',
+  hihat: 'Hi-Hat',
+  percussion: 'Perc.',
+  perc: 'Perc.',
+  // Misc
+  condenser: 'Condenser',
+  mic: 'Dynamic',
+  di: 'DI',
+  podium: 'Podium',
+  talk: 'Podium',
+  tal: 'Podium',
+  audience: 'Audience',
+  ambient: 'Condenser',
+  media: 'Media1',
+  spotify: 'Media1',
+  playback: 'Media1',
+  wedge: 'Wedge',
+  monitor: 'Wedge',
+  speaker: 'Speaker',
+  pa: 'Speaker',
+  fader: 'Fader',
+  blank: 'Blank',
+  default: 'Blank',
+};
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function getColorName(colorInput: string): string {
+  const normalized = colorInput.toLowerCase();
+  return YAMAHA_COLOR_NAMES[normalized] || 'White';
 }
 
-function generateHeader(header: YamahaHeader): string {
-  return `[Information]\n${header.model},${header.version},${header.tableType}\n`;
+function getIconName(category?: string, name?: string): string {
+  if (category) {
+    const normalized = category.toLowerCase();
+    if (YAMAHA_ICONS[normalized]) {
+      return YAMAHA_ICONS[normalized];
+    }
+  }
+  if (name) {
+    const nameLower = name.toLowerCase();
+    for (const [key, icon] of Object.entries(YAMAHA_ICONS)) {
+      if (nameLower.includes(key)) {
+        return icon;
+      }
+    }
+  }
+  return 'Blank';
+}
+
+function formatChannelNumber(num: number): string {
+  return `_${num.toString().padStart(2, '0')}`;
 }
 
 function getModelString(model: ConsoleModel): string {
@@ -71,128 +141,240 @@ function getModelString(model: ConsoleModel): string {
   return modelMap[model] || 'QL1';
 }
 
+function generateHeader(model: string): string {
+  return `[Information]\n${model}\nV4.1\n`;
+}
+
 // ============================================================================
-// Input Name CSV Generator
+// CSV Generators
 // ============================================================================
 
-function generateInputNameCSV(mix: UniversalMix): string {
-  const modelStr = getModelString(mix.console.model);
-  let csv = generateHeader({
-    model: modelStr,
-    version: 'V4.1',
-    tableType: 'Channel Name Table',
-  });
-
-  csv += '\n[Channel Name]\n';
-  csv += 'CH,Name,Color\n';
+function generateInNameCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[InName]\n';
+  csv += 'IN,NAME,COLOR,ICON,\n';
 
   for (const channel of mix.currentScene.channels) {
     if (channel.type === 'mono' || channel.type === 'stereo') {
+      const num = formatChannelNumber(channel.number);
       const name = truncateName(channel.shortName || channel.name, 8);
-      const color = YAMAHA_COLORS[channel.color.name.toLowerCase()] ?? 7;
-      csv += `IN ${channel.number},${name},${color}\n`;
+      const color = getColorName(channel.color.name);
+      const icon = getIconName(channel.category, channel.name);
+      csv += `${num},"${name}","${color}","${icon}",\n`;
     }
   }
 
   return csv;
 }
 
-// ============================================================================
-// Output Name CSV Generator
-// ============================================================================
-
-function generateOutputNameCSV(mix: UniversalMix): string {
-  const modelStr = getModelString(mix.console.model);
-  let csv = generateHeader({
-    model: modelStr,
-    version: 'V4.1',
-    tableType: 'Output Name Table',
-  });
-
-  csv += '\n[Output Name]\n';
-  csv += 'Output,Name,Color\n';
-
-  for (const bus of mix.currentScene.buses) {
-    const name = truncateName(bus.shortName || bus.name, 8);
-    const color = YAMAHA_COLORS[bus.color.name.toLowerCase()] ?? 7;
-
-    if (bus.type === 'aux') {
-      csv += `MIX ${bus.number},${name},${color}\n`;
-    } else if (bus.type === 'matrix') {
-      csv += `MTX ${bus.number},${name},${color}\n`;
-    }
-  }
-
-  // Add main outputs
-  csv += 'ST L,Main L,7\n';
-  csv += 'ST R,Main R,7\n';
-
-  return csv;
-}
-
-// ============================================================================
-// Dante Patch CSV Generator
-// ============================================================================
-
-function generateDantePatchCSV(mix: UniversalMix): string {
-  const modelStr = getModelString(mix.console.model);
-  let csv = generateHeader({
-    model: modelStr,
-    version: 'V4.1',
-    tableType: 'Dante Input Patch Table',
-  });
-
-  csv += '\n[Dante Input Patch]\n';
-  csv += 'Console Input,Dante Input\n';
+function generateInPatchCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[InPatch]\n';
+  csv += 'IN PATCH,SOURCE,COMMENT\n';
 
   for (const channel of mix.currentScene.channels) {
-    if (channel.input.source.type === 'dante' || channel.input.source.type === 'tio') {
-      const dantePort = channel.input.source.port;
-      csv += `IN ${channel.number},Dante ${dantePort}\n`;
+    const source = channel.input.source;
+    let sourceStr = '';
+    let comment = '';
+
+    if (source.type === 'dante' || source.type === 'tio') {
+      sourceStr = `DANTE ${source.port}`;
+      comment = `# ${source.label || `Dante In ${source.port}`}`;
+    } else if (source.type === 'local') {
+      sourceStr = `INPUT ${source.port}`;
+      comment = `# Local In ${source.port}`;
+    } else if (source.type === 'aes') {
+      sourceStr = `AES ${source.port}`;
+      comment = `# AES In ${source.port}`;
+    }
+
+    if (sourceStr) {
+      csv += `CH ${channel.number},${sourceStr},"${comment}",\n`;
     }
   }
 
   return csv;
 }
 
+function generateOutPatchCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[OutPatch]\n';
+  csv += 'OUT PATCH,SOURCE,COMMENT\n';
+
+  // Output patches for buses with physical outputs
+  for (const bus of mix.currentScene.buses) {
+    if (bus.output) {
+      const output = bus.output;
+      if (output.type === 'local') {
+        csv += `OUTPUT ${output.port},${bus.type.toUpperCase()} ${bus.number},"# ${bus.name}",\n`;
+      }
+    }
+  }
+
+  return csv;
+}
+
+function generatePortRackPatchCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[PortRackPatch]\n';
+  csv += 'PORT RACK PATCH,SOURCE,COMMENT\n';
+
+  // Dante outputs for monitors and PA
+  for (const bus of mix.currentScene.buses) {
+    if (bus.output && (bus.output.type === 'dante' || bus.output.type === 'tio')) {
+      const dantePort = bus.output.port;
+      const sourceType = bus.type === 'aux' ? 'MIX' : bus.type === 'matrix' ? 'MATRIX' : 'MIX';
+      csv += `DANTE ${dantePort},${sourceType} ${bus.number},"# ${bus.name}",\n`;
+    }
+  }
+
+  // Direct outputs for recording
+  for (const channel of mix.currentScene.channels) {
+    if (channel.directOut?.enabled && channel.directOut.destination) {
+      const dest = channel.directOut.destination;
+      if (dest.type === 'dante') {
+        csv += `DANTE ${dest.port},DIR CH ${channel.number},"# Rec ${channel.shortName || channel.name}",\n`;
+      }
+    }
+  }
+
+  return csv;
+}
+
+function generateMixNameCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[MixName]\n';
+  csv += 'MIX,NAME,COLOR,ICON,\n';
+
+  const mixBuses = mix.currentScene.buses.filter(b => b.type === 'aux');
+  for (const bus of mixBuses) {
+    const num = formatChannelNumber(bus.number);
+    const name = truncateName(bus.shortName || bus.name, 8);
+    const color = getColorName(bus.color.name);
+    const icon = bus.purpose === 'monitor' || bus.purpose === 'iem' ? 'Wedge' : 'Fader';
+    csv += `${num},"${name}","${color}","${icon}",\n`;
+  }
+
+  return csv;
+}
+
+function generateMtxNameCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[MtxName]\n';
+  csv += 'MATRIX,NAME,COLOR,ICON,\n';
+
+  const matrixBuses = mix.currentScene.buses.filter(b => b.type === 'matrix');
+  for (const bus of matrixBuses) {
+    const num = formatChannelNumber(bus.number);
+    const name = truncateName(bus.shortName || bus.name, 8);
+    const color = getColorName(bus.color.name);
+    csv += `${num},"${name}","${color}","Speaker",\n`;
+  }
+
+  return csv;
+}
+
+function generateDCANameCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[DCAName]\n';
+  csv += 'DCA,NAME,COLOR,ICON,\n';
+
+  for (const dca of mix.currentScene.dcas) {
+    const num = formatChannelNumber(dca.number);
+    const name = truncateName(dca.shortName || dca.name, 8);
+    const color = getColorName(dca.color.name);
+    csv += `${num},"${name}","${color}","Fader",\n`;
+  }
+
+  return csv;
+}
+
+function generateStNameCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[StName]\n';
+  csv += 'ST,NAME,COLOR,ICON,\n';
+
+  // Stereo inputs (default values)
+  const stereoChannels = mix.currentScene.channels.filter(c => c.type === 'stereo');
+  if (stereoChannels.length === 0) {
+    csv += `_01,"ST IN 1","Black","Blank",\n`;
+  } else {
+    for (const ch of stereoChannels) {
+      const num = formatChannelNumber(ch.number);
+      const name = truncateName(ch.shortName || ch.name, 8);
+      const color = getColorName(ch.color.name);
+      csv += `${num},"${name}","${color}","Blank",\n`;
+    }
+  }
+
+  return csv;
+}
+
+function generateStMonoNameCSV(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
+  let csv = generateHeader(model);
+  csv += '[StMonoName]\n';
+  csv += 'STEREO/MONO,NAME,COLOR,ICON,\n';
+  csv += `_01,"Main L","Yellow","Fader",\n`;
+  csv += `_02,"Main R","Yellow","Fader",\n`;
+  csv += `_03,"Mono","Black","Fader",\n`;
+
+  return csv;
+}
+
 // ============================================================================
-// Phantom Power List Generator
+// Documentation Generators
 // ============================================================================
 
-function generatePhantomPowerList(mix: UniversalMix): string {
+function generatePhantomPowerMD(mix: UniversalMix): string {
   let md = '# Fantommatning (+48V)\n\n';
   md += 'Följande kanaler behöver fantommatning:\n\n';
-  md += '| Kanal | Namn | Mikrofon |\n';
-  md += '|-------|------|----------|\n';
+  md += '| Kanal | Namn | Källa | Typ |\n';
+  md += '|-------|------|-------|-----|\n';
 
   const phantomChannels = mix.currentScene.channels.filter(
-    (ch) => ch.input.phantomPower === 'on'
+    ch => ch.input.phantomPower === 'on'
   );
 
   if (phantomChannels.length === 0) {
-    md += '| - | Inga kanaler kräver fantommatning | - |\n';
+    md += '| - | Inga kanaler kräver fantommatning | - | - |\n';
   } else {
     for (const ch of phantomChannels) {
-      md += `| IN ${ch.number} | ${ch.name} | ${ch.notes || 'Kondensator'} |\n`;
+      const source = ch.input.source;
+      const sourceStr = source.type === 'dante' || source.type === 'tio'
+        ? `Dante ${source.port}`
+        : `Local ${source.port}`;
+      md += `| CH ${ch.number} | ${ch.name} | ${sourceStr} | Kondensator |\n`;
     }
   }
 
-  md += '\n**OBS:** Slå på +48V på Rio/Tio-stagebox eller i QL1 HA-sektionen.\n';
+  md += '\n## Aktivera +48V\n\n';
+  md += '### På Tio1608-D Stagebox:\n';
+  md += '1. Öppna QL1 → Setup → Dante Setup\n';
+  md += '2. Välj Tio1608 i listan\n';
+  md += '3. Aktivera +48V för aktuella ingångar\n\n';
+  md += '### På lokala ingångar:\n';
+  md += '1. Gå till Selected Channel → HA (Head Amp)\n';
+  md += '2. Aktivera +48V\n';
 
   return md;
 }
 
-// ============================================================================
-// Gain & EQ Recommendations Generator
-// ============================================================================
-
-function generateProcessingGuide(mix: UniversalMix): string {
+function generateProcessingGuideMD(mix: UniversalMix): string {
   let md = '# Processing Guide\n\n';
   md += `**Gig:** ${mix.gig.name}\n`;
   md += `**Artist:** ${mix.gig.artist.name}\n`;
-  md += `**Genre:** ${mix.gig.artist.genre.join(', ')}\n\n`;
+  md += `**Genre:** ${mix.gig.artist.genre.join(', ')}\n`;
+  md += `**Datum:** ${mix.gig.date}\n\n`;
 
-  // AI recommendations if available
   if (mix.aiNotes) {
     md += '## AI-rekommendationer\n\n';
     if (mix.aiNotes.genreRecommendations.length > 0) {
@@ -209,91 +391,103 @@ function generateProcessingGuide(mix: UniversalMix): string {
       }
       md += '\n';
     }
+    if (mix.aiNotes.warnings.length > 0) {
+      md += '### Varningar\n';
+      for (const warn of mix.aiNotes.warnings) {
+        md += `⚠️ ${warn}\n`;
+      }
+      md += '\n';
+    }
   }
 
   md += '## Kanalinställningar\n\n';
-  md += '| Kanal | Namn | HPF | Gain (start) | Kompressor | Anteckningar |\n';
-  md += '|-------|------|-----|--------------|------------|-------------|\n';
+  md += '| CH | Namn | HPF | Gain | Komp | Kategori |\n';
+  md += '|----|------|-----|------|------|----------|\n';
 
   for (const ch of mix.currentScene.channels) {
     const hpf = ch.eq.highPassFilter.enabled
       ? `${ch.eq.highPassFilter.frequency}Hz`
       : 'OFF';
-    const gain = ch.input.gain > 0 ? `+${ch.input.gain}dB` : `${ch.input.gain}dB`;
+    const gain = `${ch.input.gain >= 0 ? '+' : ''}${ch.input.gain}dB`;
     const comp = ch.dynamics.compressor.enabled
       ? `${ch.dynamics.compressor.ratio}:1`
       : 'OFF';
-    const notes = ch.notes || ch.category || '';
+    const cat = ch.category || '-';
 
-    md += `| IN ${ch.number} | ${ch.name} | ${hpf} | ${gain} | ${comp} | ${notes} |\n`;
+    md += `| ${ch.number} | ${ch.name} | ${hpf} | ${gain} | ${comp} | ${cat} |\n`;
   }
 
   md += '\n## Premium Rack Rekommendationer\n\n';
-  md += 'För "varmt, organiskt" ljud, överväg:\n\n';
-  md += '- **Rupert Neve Designs Portico 5033 EQ** på huvudsång\n';
-  md += '- **Rupert Neve Designs Portico 5043 Comp** på akustiska instrument\n';
-  md += '- **Rev-X Hall** för rumskänsla på akustiskt material\n';
+  md += 'För akustisk/organiskt ljud:\n\n';
+  md += '- **Rupert Neve Portico 5033 EQ** - Sång, stränginstrument\n';
+  md += '- **Rupert Neve Portico 5043 Comp** - Sång (soft knee, 3:1)\n';
+  md += '- **Rev-X Hall** - Huvudreverb (1.5-2.0s, predelay 20-30ms)\n';
+  md += '- **SPX Delay** - Subtil slap för sång\n';
 
   return md;
 }
 
-// ============================================================================
-// Import Instructions Generator
-// ============================================================================
+function generateReadmeMD(mix: UniversalMix): string {
+  const model = getModelString(mix.console.model);
 
-function generateImportInstructions(mix: UniversalMix): string {
-  const modelStr = getModelString(mix.console.model);
+  return `# Import-instruktioner för ${model}
 
-  return `# Import-instruktioner för ${modelStr}
+## Innehåll i denna ZIP
 
-## Förberedelser
+| Fil | Beskrivning |
+|-----|-------------|
+| InName.csv | Kanalnamn, färger och ikoner |
+| InPatch.csv | Input-routing (Dante/Lokal) |
+| OutPatch.csv | Output-routing |
+| PortRackPatch.csv | Dante-utgångar (PA, Monitor, Rec) |
+| MixName.csv | Mix/Aux-bussnamn |
+| MtxName.csv | Matrix-namn |
+| DCAName.csv | DCA-namn |
+| StName.csv | Stereo-ingångar |
+| StMonoName.csv | Master-namn |
+| PhantomPower.md | Lista på +48V-kanaler |
+| ProcessingGuide.md | EQ/Dynamics-rekommendationer |
 
-1. Ladda ner och installera **${modelStr} Editor** från Yamaha Pro Audio
-2. Packa upp ZIP-filen till en mapp
+## Import-steg
 
-## Import av CSV-filer
+### 1. Öppna ${model} Editor
+1. Starta Yamaha ${model} Editor på din dator
+2. Skapa nytt projekt eller öppna befintligt
 
-### Steg 1: Öppna Editor
-1. Starta ${modelStr} Editor
-2. Skapa ett nytt projekt eller öppna befintligt
+### 2. Importera CSV-filer
+1. **File → Import → Channel Name Table**
+   - Välj \`InName.csv\`
+2. **File → Import → Input Patch Table**
+   - Välj \`InPatch.csv\`
+3. **File → Import → Output Patch Table**
+   - Välj \`OutPatch.csv\`
+4. Upprepa för övriga filer efter behov
 
-### Steg 2: Importera Kanalnamn
-1. Gå till **File → Import → Channel Name Table**
-2. Välj filen \`InName.csv\`
-3. Bekräfta importen
+### 3. Spara till USB
+1. **File → Save As**
+2. Spara till USB-minne som .CLF-fil
+3. Sätt i USB i ${model}
+4. **Load → USB → Välj fil**
 
-### Steg 3: Importera Output-namn
-1. Gå till **File → Import → Output Name Table**
-2. Välj filen \`OutName.csv\`
+## Manuella steg (CSV stödjer inte detta)
 
-### Steg 4: Importera Dante-patch (om tillämpligt)
-1. Gå till **Setup → Dante Setup**
-2. Importera \`DantePatch.csv\` eller konfigurera manuellt
+⚠️ Följande måste göras manuellt i Editor eller på bordet:
 
-## Manuella steg (CSV kan inte göra detta)
-
-⚠️ Följande måste ställas in manuellt i Editor eller på bordet:
-
-1. **Fantommatning (+48V)** - Se PhantomPower.md
-2. **Gain-nivåer** - Se ProcessingGuide.md
-3. **EQ-inställningar** - Se ProcessingGuide.md
-4. **Premium Rack** - Montera önskade enheter manuellt
-
-## Spara till USB
-
-1. I Editor: **File → Save As**
-2. Spara som .CLF-fil till USB-sticka
-3. På ${modelStr}: **Load → USB → Välj fil**
+- [ ] Aktivera +48V (se PhantomPower.md)
+- [ ] Sätt Gain-nivåer (se ProcessingGuide.md)
+- [ ] Konfigurera EQ (se ProcessingGuide.md)
+- [ ] Montera Premium Rack-enheter
+- [ ] Konfigurera effektprocessorer
 
 ## Tips
 
-- Kör Line Check och justera gain efter verklig nivå
-- Dokumentet ProcessingGuide.md har startpunkter för EQ/Dynamics
-- Premium Rack-enheter måste monteras manuellt efter import
+- Kör Line Check och justera gain efter faktisk nivå
+- Börja med faders nere och jobba upp
+- Spara ofta under soundcheck
 
 ---
-Genererat av Gig-Prepper AI Sound Engineer
-${new Date().toISOString().split('T')[0]}
+*Genererat av Gig-Prepper AI Sound Engineer*
+*${new Date().toISOString().split('T')[0]}*
 `;
 }
 
@@ -306,15 +500,15 @@ export class YamahaAdapter implements ConsoleAdapter {
     manufacturer: 'yamaha',
     supportedModels: ['cl1', 'cl3', 'cl5', 'ql1', 'ql5', 'tf1', 'tf3', 'tf5'],
     name: 'Yamaha CL/QL/TF Adapter',
-    version: '1.0.0',
+    version: '1.1.0',
     author: 'Gig-Prepper',
     capabilities: {
-      canExportScene: false, // Full scenes require .CLF which is binary
+      canExportScene: false,
       canExportInputList: true,
       canExportChannelNames: true,
       canExportPatch: true,
-      canExportEQ: false, // Not via CSV
-      canExportDynamics: false, // Not via CSV
+      canExportEQ: false,
+      canExportDynamics: false,
       canExportRouting: true,
       canExportEffects: false,
       canImportScene: false,
@@ -324,9 +518,9 @@ export class YamahaAdapter implements ConsoleAdapter {
       offlineEditorName: 'Yamaha CL/QL Editor',
       offlineEditorUrl: 'https://www.yamahaproaudio.com/',
       notes: [
-        'CSV-filer kan endast sätta namn, färger och Dante-patch',
-        'EQ, Gain, Dynamics och Premium Rack måste sättas manuellt',
-        'Genererar PDF-guide med rekommenderade inställningar',
+        'Använder beprövat CSV-format med [Information]-headers',
+        'ASCII-kodning för kompatibilitet',
+        'EQ, Gain, Dynamics exporteras som dokumentation',
       ],
     },
   };
@@ -337,79 +531,114 @@ export class YamahaAdapter implements ConsoleAdapter {
     const errors: string[] = [];
 
     try {
-      // Generate Input Names CSV
+      // Generate all CSV files
       files.push({
         filename: 'InName.csv',
         extension: '.csv',
-        content: generateInputNameCSV(mix),
-        mimeType: 'text/csv;charset=utf-8',
-        description: 'Kanalnamn för import',
+        content: generateInNameCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'Kanalnamn, färger och ikoner',
       });
 
-      // Generate Output Names CSV
       files.push({
-        filename: 'OutName.csv',
+        filename: 'InPatch.csv',
         extension: '.csv',
-        content: generateOutputNameCSV(mix),
-        mimeType: 'text/csv;charset=utf-8',
-        description: 'Output-namn för import',
+        content: generateInPatchCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'Input-routing (Dante/Lokal)',
       });
 
-      // Generate Dante Patch CSV if using Dante
-      const hasDante = mix.currentScene.channels.some(
-        (ch) => ch.input.source.type === 'dante' || ch.input.source.type === 'tio'
-      );
-      if (hasDante) {
-        files.push({
-          filename: 'DantePatch.csv',
-          extension: '.csv',
-          content: generateDantePatchCSV(mix),
-          mimeType: 'text/csv;charset=utf-8',
-          description: 'Dante Input Patching',
-        });
-      }
+      files.push({
+        filename: 'OutPatch.csv',
+        extension: '.csv',
+        content: generateOutPatchCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'Output-routing',
+      });
 
-      // Generate Phantom Power list
+      files.push({
+        filename: 'PortRackPatch.csv',
+        extension: '.csv',
+        content: generatePortRackPatchCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'Dante-utgångar (PA, Monitor, Recording)',
+      });
+
+      files.push({
+        filename: 'MixName.csv',
+        extension: '.csv',
+        content: generateMixNameCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'Mix/Aux-bussnamn',
+      });
+
+      files.push({
+        filename: 'MtxName.csv',
+        extension: '.csv',
+        content: generateMtxNameCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'Matrix-namn',
+      });
+
+      files.push({
+        filename: 'DCAName.csv',
+        extension: '.csv',
+        content: generateDCANameCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'DCA-namn',
+      });
+
+      files.push({
+        filename: 'StName.csv',
+        extension: '.csv',
+        content: generateStNameCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'Stereo-ingångar',
+      });
+
+      files.push({
+        filename: 'StMonoName.csv',
+        extension: '.csv',
+        content: generateStMonoNameCSV(mix),
+        mimeType: 'text/csv;charset=ascii',
+        description: 'Master-namn (ST L/R, Mono)',
+      });
+
+      // Generate documentation
       files.push({
         filename: 'PhantomPower.md',
         extension: '.md',
-        content: generatePhantomPowerList(mix),
+        content: generatePhantomPowerMD(mix),
         mimeType: 'text/markdown',
-        description: 'Kanaler som kräver +48V',
+        description: 'Lista på kanaler som behöver +48V',
       });
 
-      // Generate Processing Guide
       files.push({
         filename: 'ProcessingGuide.md',
         extension: '.md',
-        content: generateProcessingGuide(mix),
+        content: generateProcessingGuideMD(mix),
         mimeType: 'text/markdown',
         description: 'EQ, Gain och Dynamics-rekommendationer',
       });
 
-      // Generate Import Instructions
       files.push({
-        filename: 'README_Import.md',
+        filename: 'README.md',
         extension: '.md',
-        content: generateImportInstructions(mix),
+        content: generateReadmeMD(mix),
         mimeType: 'text/markdown',
-        description: 'Steg-för-steg importinstruktioner',
+        description: 'Import-instruktioner',
       });
 
-      // Add warnings for limitations
-      if (mix.currentScene.channels.some((ch) => ch.eq.bands.some((b) => b.enabled))) {
-        warnings.push(
-          'EQ-inställningar finns i mixen men kan inte exporteras till CSV. Se ProcessingGuide.md.'
-        );
-      }
-      if (mix.currentScene.channels.some((ch) => ch.dynamics.compressor.enabled)) {
-        warnings.push(
-          'Kompressor-inställningar finns men kan inte exporteras. Se ProcessingGuide.md.'
-        );
+      // Add warnings
+      const phantomCount = mix.currentScene.channels.filter(
+        ch => ch.input.phantomPower === 'on'
+      ).length;
+      if (phantomCount > 0) {
+        warnings.push(`${phantomCount} kanal(er) kräver +48V. Se PhantomPower.md.`);
       }
 
     } catch (error) {
-      errors.push(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      errors.push(`Export misslyckades: ${error instanceof Error ? error.message : 'Okänt fel'}`);
     }
 
     return {
@@ -418,11 +647,14 @@ export class YamahaAdapter implements ConsoleAdapter {
       warnings,
       errors,
       instructions: [
-        '1. Packa upp ZIP-filen',
+        '1. Packa upp ZIP-filen till en mapp',
         '2. Öppna Yamaha CL/QL Editor',
-        '3. Importera CSV-filerna via File → Import',
-        '4. Läs ProcessingGuide.md för EQ/Gain-inställningar',
-        '5. Spara som .CLF till USB och ladda in i bordet',
+        '3. File → Import → Channel Name Table → InName.csv',
+        '4. File → Import → Input Patch Table → InPatch.csv',
+        '5. Importera övriga CSV-filer efter behov',
+        '6. Läs PhantomPower.md och aktivera +48V',
+        '7. Läs ProcessingGuide.md för EQ/Gain-tips',
+        '8. Spara som .CLF till USB och ladda i bordet',
       ],
     };
   }
@@ -438,19 +670,14 @@ export class YamahaAdapter implements ConsoleAdapter {
     }
 
     if (!this.info.supportedModels.includes(mix.console.model)) {
-      errors.push(`Modellen ${mix.console.model} stöds inte av denna adapter.`);
+      errors.push(`Modellen ${mix.console.model} stöds inte.`);
     }
 
-    // Check channel count
+    // Check channel limits
     const maxChannels: Record<string, number> = {
-      cl1: 48,
-      cl3: 64,
-      cl5: 72,
-      ql1: 32,
-      ql5: 64,
-      tf1: 16,
-      tf3: 24,
-      tf5: 32,
+      cl1: 48, cl3: 64, cl5: 72,
+      ql1: 32, ql5: 64,
+      tf1: 16, tf3: 24, tf5: 32,
     };
 
     const max = maxChannels[mix.console.model] || 32;
@@ -464,8 +691,16 @@ export class YamahaAdapter implements ConsoleAdapter {
     for (const ch of mix.currentScene.channels) {
       const displayName = ch.shortName || ch.name;
       if (displayName.length > 8) {
-        warnings.push(`Kanal "${ch.name}" har för långt namn (${displayName.length} tecken, max 8)`);
+        warnings.push(`"${ch.name}" är för långt (${displayName.length} tecken, max 8)`);
         suggestions.push(`Förkorta "${ch.name}" till max 8 tecken`);
+      }
+    }
+
+    // Check for special characters
+    for (const ch of mix.currentScene.channels) {
+      if (/[åäöÅÄÖ]/.test(ch.name)) {
+        warnings.push(`"${ch.name}" innehåller svenska tecken som kan orsaka problem`);
+        suggestions.push(`Ersätt å→a, ä→a, ö→o i "${ch.name}"`);
       }
     }
 
