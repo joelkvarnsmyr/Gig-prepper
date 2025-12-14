@@ -11,6 +11,7 @@ interface ChatMessageProps {
     type: 'image' | 'pdf';
     filename: string;
   }>;
+  isStreaming?: boolean;
 }
 
 export function ChatMessage({
@@ -19,6 +20,7 @@ export function ChatMessage({
   timestamp,
   toolsUsed,
   attachments,
+  isStreaming = false,
 }: ChatMessageProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -127,6 +129,9 @@ export function ChatMessage({
         {/* Content */}
         <div className="text-sm leading-relaxed whitespace-pre-wrap">
           {formatContent(content)}
+          {isStreaming && (
+            <span className="inline-block w-2 h-4 ml-0.5 bg-emerald-400 animate-pulse" />
+          )}
         </div>
 
         {/* Tools used */}
