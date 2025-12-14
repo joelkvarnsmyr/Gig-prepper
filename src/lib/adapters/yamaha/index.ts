@@ -526,9 +526,11 @@ function generateEffectsRackMD(mix: UniversalMix): string {
 
   for (const ch of mix.currentScene.channels) {
     const sends = ch.effectSends || [];
-    const fx1 = sends[0]?.level ?? '-∞';
-    const fx2 = sends[1]?.level ?? '-∞';
-    md += `| ${ch.number} | ${ch.name} | ${fx1 === '-∞' ? '-' : fx1 + 'dB'} | ${fx2 === '-∞' ? '-' : fx2 + 'dB'} |\n`;
+    const fx1 = sends[0]?.level;
+    const fx2 = sends[1]?.level;
+    const fx1Str = fx1 === undefined || fx1 <= -96 ? '-' : `${fx1}dB`;
+    const fx2Str = fx2 === undefined || fx2 <= -96 ? '-' : `${fx2}dB`;
+    md += `| ${ch.number} | ${ch.name} | ${fx1Str} | ${fx2Str} |\n`;
   }
 
   return md;
@@ -970,6 +972,38 @@ export class YamahaAdapter implements ConsoleAdapter {
         '5. Ladda in i bord och kör line check',
       ],
     };
+  }
+
+  /**
+   * Synchronous generate method for simpler use cases
+   * Returns array of files with name and content
+   */
+  generate(mix: UniversalMix): Array<{ name: string; content: string; type: string }> {
+    const files: Array<{ name: string; content: string; type: string }> = [];
+
+    // CSV files
+    files.push({ name: 'InName.csv', content: generateInNameCSV(mix), type: 'csv' });
+    files.push({ name: 'InPatch.csv', content: generateInPatchCSV(mix), type: 'csv' });
+    files.push({ name: 'OutPatch.csv', content: generateOutPatchCSV(mix), type: 'csv' });
+    files.push({ name: 'PortRackPatch.csv', content: generatePortRackPatchCSV(mix), type: 'csv' });
+    files.push({ name: 'MixName.csv', content: generateMixNameCSV(mix), type: 'csv' });
+    files.push({ name: 'MtxName.csv', content: generateMtxNameCSV(mix), type: 'csv' });
+    files.push({ name: 'DCAName.csv', content: generateDCANameCSV(mix), type: 'csv' });
+    files.push({ name: 'StName.csv', content: generateStNameCSV(mix), type: 'csv' });
+    files.push({ name: 'StMonoName.csv', content: generateStMonoNameCSV(mix), type: 'csv' });
+
+    // MD documentation files
+    files.push({ name: 'README.md', content: generateReadmeMD(mix), type: 'md' });
+    files.push({ name: 'MASTER.md', content: generateMasterDocMD(mix), type: 'md' });
+    files.push({ name: 'GainSheet.md', content: generateGainSheetMD(mix), type: 'md' });
+    files.push({ name: 'PhantomPower.md', content: generatePhantomPowerMD(mix), type: 'md' });
+    files.push({ name: 'EQ_Guide.md', content: generateEQGuideMD(mix), type: 'md' });
+    files.push({ name: 'Dynamics_Guide.md', content: generateDynamicsGuideMD(mix), type: 'md' });
+    files.push({ name: 'Effects_Rack.md', content: generateEffectsRackMD(mix), type: 'md' });
+    files.push({ name: 'Premium_Rack.md', content: generatePremiumRackMD(mix), type: 'md' });
+    files.push({ name: 'Monitor_Guide.md', content: generateMonitorGuideMD(mix), type: 'md' });
+
+    return files;
   }
 
   validate(mix: UniversalMix): ValidationResult {

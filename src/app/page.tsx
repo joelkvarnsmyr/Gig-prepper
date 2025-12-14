@@ -56,7 +56,7 @@ export default function Home() {
             <Link href="#consoles" className="text-zinc-400 hover:text-white transition-colors text-sm">
               Konsoler
             </Link>
-            <Link href="/app" className="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 transition-colors text-sm font-medium">
+            <Link href="/chat" className="px-4 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 transition-colors text-sm font-medium">
               Starta
             </Link>
           </div>
@@ -83,7 +83,7 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
             <Link
-              href="/app"
+              href="/chat"
               className="w-full sm:w-auto px-8 py-4 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 transition-all text-lg font-semibold flex items-center justify-center gap-2"
             >
               <ChatIcon />
@@ -428,7 +428,7 @@ export default function Home() {
             Börja använda AI Sound Engineer idag. Gratis att testa.
           </p>
           <Link
-            href="/app"
+            href="/chat"
             className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 transition-all text-lg font-semibold"
           >
             <ChatIcon />
