@@ -299,16 +299,38 @@ export function extractPreferencesFromMessage(
     }
   }
 
-  // Genre detection
+  // Genre detection - order matters, more specific patterns first
   const genrePatterns: [RegExp, string][] = [
-    [/\b(rock|indie)\b/i, 'rock'],
-    [/\b(pop|schlager)\b/i, 'pop'],
-    [/\b(metal|hårdrock)\b/i, 'metal'],
+    // Swedish-specific genres
+    [/\b(dansband)\b/i, 'dansband'],
+    [/\b(schlager)\b/i, 'schlager'],
+    [/\b(visa|singer.?songwriter)\b/i, 'singer-songwriter'],
+    [/\b(musikal|musical)\b/i, 'musical'],
+    // Rock variants (before generic rock)
+    [/\b(punk|hardcore)\b/i, 'punk'],
+    [/\b(metal|hårdrock|death|black)\b/i, 'metal'],
+    [/\b(indie)\b/i, 'indie'],
+    [/\b(ska)\b/i, 'ska'],
+    // Main genres
+    [/\b(rock)\b/i, 'rock'],
+    [/\b(pop)\b/i, 'pop'],
     [/\b(jazz)\b/i, 'jazz'],
-    [/\b(folk|visa|acoustic)\b/i, 'folk'],
-    [/\b(worship|lovsång)\b/i, 'worship'],
+    [/\b(folk|acoustic|akustisk)\b/i, 'folk'],
+    [/\b(worship|lovsång|praise)\b/i, 'worship'],
     [/\b(gospel)\b/i, 'gospel'],
-    [/\b(klassisk|classical)\b/i, 'classical'],
+    [/\b(klassisk|classical|orkester)\b/i, 'classical'],
+    [/\b(funk)\b/i, 'funk'],
+    [/\b(r&b|rnb|soul)\b/i, 'rnb'],
+    [/\b(hiphop|hip.?hop|rap)\b/i, 'hiphop'],
+    [/\b(electronic|techno|house|edm)\b/i, 'electronic'],
+    [/\b(country)\b/i, 'country'],
+    [/\b(blues)\b/i, 'blues'],
+    [/\b(reggae|dub)\b/i, 'reggae'],
+    [/\b(latin|salsa|bossa)\b/i, 'latin'],
+    [/\b(cinematic|filmmusik|soundtrack)\b/i, 'cinematic'],
+    [/\b(teater|theater)\b/i, 'theater'],
+    [/\b(konferens|corporate|företag)\b/i, 'corporate'],
+    [/\b(podcast|podd)\b/i, 'podcast'],
   ];
 
   for (const [pattern, genre] of genrePatterns) {

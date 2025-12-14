@@ -558,7 +558,8 @@ export type Genre =
   | 'rock' | 'pop' | 'metal' | 'jazz' | 'folk' | 'acoustic' | 'classical'
   | 'hiphop' | 'electronic' | 'country' | 'blues' | 'gospel' | 'worship'
   | 'reggae' | 'latin' | 'world' | 'theater' | 'corporate' | 'podcast'
-  | 'broadcast' | 'other';
+  | 'broadcast' | 'rnb' | 'funk' | 'punk' | 'indie' | 'dansband' | 'schlager'
+  | 'singer-songwriter' | 'cinematic' | 'ska' | 'musical' | 'other';
 
 export type VenueType = 'club' | 'theater' | 'arena' | 'outdoor' | 'church' | 'studio' | 'corporate' | 'festival' | 'other';
 
@@ -972,6 +973,83 @@ export const GENRE_PRESETS: Record<Genre, GenrePreset> = {
     defaultDelay: { algorithm: 'mono-delay', timeLeft: 0, feedback: 0 },
     vocalProcessing: { hpf: 100, compression: { ratio: 6, knee: 'medium', attack: 2 }, deEss: true },
     masterProcessing: { compression: true, limiter: true },
+  },
+  rnb: {
+    genre: 'rnb',
+    mixPhilosophy: 'Slät, varm, groovy. Sång i fokus med luftig känsla. Tight bas.',
+    defaultReverb: { algorithm: 'rev-x-hall', time: 1.6, preDelay: 25 },
+    defaultDelay: { algorithm: 'stereo-delay', timeLeft: 300, feedback: 25 },
+    vocalProcessing: { hpf: 90, compression: { ratio: 4, knee: 'soft', attack: 8 }, deEss: true },
+    drumProcessing: { gateKick: true, gateSnare: true, gateThreshold: -35 },
+  },
+  funk: {
+    genre: 'funk',
+    mixPhilosophy: 'Tight, groovy, punchy. Bas och trummor i fokus. Dynamiskt.',
+    defaultReverb: { algorithm: 'spx-room', time: 0.8, preDelay: 10 },
+    defaultDelay: { algorithm: 'mono-delay', timeLeft: 200, feedback: 15 },
+    vocalProcessing: { hpf: 100, compression: { ratio: 3.5, knee: 'medium', attack: 8 }, deEss: true },
+    drumProcessing: { gateKick: true, gateSnare: true, gateThreshold: -30 },
+  },
+  punk: {
+    genre: 'punk',
+    mixPhilosophy: 'Rått, energiskt, i ansiktet. Minimal processing, naturlig aggression.',
+    defaultReverb: { algorithm: 'spx-room', time: 0.6, preDelay: 5 },
+    defaultDelay: { algorithm: 'slapback', timeLeft: 100, feedback: 10 },
+    vocalProcessing: { hpf: 150, compression: { ratio: 6, knee: 'hard', attack: 2 }, deEss: false },
+    drumProcessing: { gateKick: false, gateSnare: false, gateThreshold: -40 },
+  },
+  indie: {
+    genre: 'indie',
+    mixPhilosophy: 'Organiskt, texturerat, atmosfäriskt. Rum och djup.',
+    defaultReverb: { algorithm: 'rev-x-hall', time: 2.0, preDelay: 30 },
+    defaultDelay: { algorithm: 'tape-delay', timeLeft: 350, feedback: 30 },
+    vocalProcessing: { hpf: 100, compression: { ratio: 3, knee: 'soft', attack: 15 }, deEss: false },
+    drumProcessing: { gateKick: false, gateSnare: false, gateThreshold: -40 },
+  },
+  dansband: {
+    genre: 'dansband',
+    mixPhilosophy: 'Polerat, dansbart, sång i centrum. Tydlig bas, glittrande tops.',
+    defaultReverb: { algorithm: 'rev-x-hall', time: 1.8, preDelay: 25 },
+    defaultDelay: { algorithm: 'stereo-delay', timeLeft: 350, feedback: 20 },
+    vocalProcessing: { hpf: 100, compression: { ratio: 4, knee: 'soft', attack: 10 }, deEss: true },
+    drumProcessing: { gateKick: true, gateSnare: true, gateThreshold: -35 },
+  },
+  schlager: {
+    genre: 'schlager',
+    mixPhilosophy: 'Brett, inbjudande, lättlyssnat. Sång och melodi i fokus.',
+    defaultReverb: { algorithm: 'rev-x-hall', time: 2.0, preDelay: 30 },
+    defaultDelay: { algorithm: 'stereo-delay', timeLeft: 320, feedback: 20 },
+    vocalProcessing: { hpf: 90, compression: { ratio: 3.5, knee: 'soft', attack: 12 }, deEss: true },
+  },
+  'singer-songwriter': {
+    genre: 'singer-songwriter',
+    mixPhilosophy: 'Intimt, ärligt, storytelling. Sång och gitarr i fokus.',
+    defaultReverb: { algorithm: 'rev-x-room', time: 1.4, preDelay: 20 },
+    defaultDelay: { algorithm: 'tape-delay', timeLeft: 280, feedback: 18 },
+    vocalProcessing: { hpf: 80, compression: { ratio: 2.5, knee: 'soft', attack: 20 }, deEss: false },
+  },
+  cinematic: {
+    genre: 'cinematic',
+    mixPhilosophy: 'Episkt, atmosfäriskt, brett. Stort soundscape, dynamik.',
+    defaultReverb: { algorithm: 'rev-x-hall', time: 3.0, preDelay: 50 },
+    defaultDelay: { algorithm: 'stereo-delay', timeLeft: 500, feedback: 35 },
+    vocalProcessing: { hpf: 80, compression: { ratio: 2, knee: 'soft', attack: 30 }, deEss: false },
+  },
+  ska: {
+    genre: 'ska',
+    mixPhilosophy: 'Energiskt, offbeat-fokus, brass i centrum. Tight rytmsektion.',
+    defaultReverb: { algorithm: 'spx-room', time: 0.9, preDelay: 12 },
+    defaultDelay: { algorithm: 'stereo-delay', timeLeft: 250, feedback: 15 },
+    vocalProcessing: { hpf: 120, compression: { ratio: 4, knee: 'medium', attack: 8 }, deEss: true },
+    drumProcessing: { gateKick: true, gateSnare: true, gateThreshold: -32 },
+  },
+  musical: {
+    genre: 'musical',
+    mixPhilosophy: 'Teatralt, tydligt tal/sång, följ dramatiken. Dynamisk nivåhantering.',
+    defaultReverb: { algorithm: 'rev-x-hall', time: 1.5, preDelay: 20 },
+    defaultDelay: { algorithm: 'mono-delay', timeLeft: 180, feedback: 12 },
+    vocalProcessing: { hpf: 100, compression: { ratio: 5, knee: 'medium', attack: 5 }, deEss: true },
+    drumProcessing: { gateKick: true, gateSnare: true, gateThreshold: -35 },
   },
   other: {
     genre: 'other',

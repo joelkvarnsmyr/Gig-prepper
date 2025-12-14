@@ -393,9 +393,9 @@ describe('extractPreferencesFromMessage', () => {
       expect(prefs.defaultGenre).toBe('rock');
     });
 
-    it('should detect indie as rock', () => {
+    it('should detect indie', () => {
       const prefs = extractPreferencesFromMessage('Indie kvartett', emptyPrefs);
-      expect(prefs.defaultGenre).toBe('rock');
+      expect(prefs.defaultGenre).toBe('indie');
     });
 
     it('should detect jazz', () => {
@@ -431,6 +431,46 @@ describe('extractPreferencesFromMessage', () => {
     it('should detect classical', () => {
       const prefs = extractPreferencesFromMessage('Klassisk konsert', emptyPrefs);
       expect(prefs.defaultGenre).toBe('classical');
+    });
+
+    it('should detect punk', () => {
+      const prefs = extractPreferencesFromMessage('Punk band från Göteborg', emptyPrefs);
+      expect(prefs.defaultGenre).toBe('punk');
+    });
+
+    it('should detect dansband', () => {
+      const prefs = extractPreferencesFromMessage('Dansband på lördagskvällen', emptyPrefs);
+      expect(prefs.defaultGenre).toBe('dansband');
+    });
+
+    it('should detect funk', () => {
+      const prefs = extractPreferencesFromMessage('Funk kollektiv', emptyPrefs);
+      expect(prefs.defaultGenre).toBe('funk');
+    });
+
+    it('should detect rnb/soul', () => {
+      const prefs = extractPreferencesFromMessage('R&B och soul kvartett', emptyPrefs);
+      expect(prefs.defaultGenre).toBe('rnb');
+    });
+
+    it('should detect ska', () => {
+      const prefs = extractPreferencesFromMessage('Ska band med stor brasssektion', emptyPrefs);
+      expect(prefs.defaultGenre).toBe('ska');
+    });
+
+    it('should detect schlager', () => {
+      const prefs = extractPreferencesFromMessage('Schlager show på hotellet', emptyPrefs);
+      expect(prefs.defaultGenre).toBe('schlager');
+    });
+
+    it('should detect electronic/EDM', () => {
+      const prefs = extractPreferencesFromMessage('Electronic DJ set', emptyPrefs);
+      expect(prefs.defaultGenre).toBe('electronic');
+    });
+
+    it('should detect hiphop/rap', () => {
+      const prefs = extractPreferencesFromMessage('Hiphop artist på scen', emptyPrefs);
+      expect(prefs.defaultGenre).toBe('hiphop');
     });
   });
 
