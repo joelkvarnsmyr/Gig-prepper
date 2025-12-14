@@ -61,30 +61,73 @@ function parseChannelsFromText(text: string): RiderChannel[] {
   const channels: RiderChannel[] = [];
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
 
-  // Common patterns for channel lists
+  // Common patterns for channel lists (order matters - most specific first)
   const patterns = [
-    // "1. Kick - SM91" or "1. Kick (SM91)"
-    /^(\d+)[\.\)\s]+([^-–(]+)(?:[-–]\s*|\s*\()([^)]+)/,
-    // "CH1: Vocals (SM58)"
-    /^CH?\s*(\d+)\s*:\s*([^(]+)(?:\(([^)]+)\))?/i,
-    // "01 Kick SM91"
-    /^(\d{1,2})\s+(\S+(?:\s+\S+)?)\s+([A-Z]{2,}\d*[A-Z]*)/i,
+    // "1. Kick - SM91" or "1. Kick (SM91)" or "1) Kick - Beta 91"
+    /^(\d+)[\.\)\s]+([^-–(]+)(?:[-–]\s*|\s*\()([^)\n]+)/,
+    // "CH1: Vocals (SM58)" or "Ch 1: Lead Vox"
+    /^CH?\s*(\d+)\s*[:\.]\s*([^(]+)(?:\(([^)]+)\))?/i,
+    // "Input 1: Kick Drum - Beta 52"
+    /^(?:Input|Inp|Kanal|Channel)\s*(\d+)\s*[:\.]\s*([^-–(]+)(?:[-–]\s*([^()\n]+))?/i,
+    // "01 Kick SM91" or "01  Kick  SM57"
+    /^(\d{1,2})\s{1,4}(\S+(?:\s+\S+)?)\s{2,}([A-Z]{2,}\d*[A-Za-z]*)/i,
+    // Table format: "1    Kick Drum    Beta 52    Boom Stand"
+    /^(\d{1,2})\s+([A-Za-zÅÄÖåäö0-9\s]+?)\s{2,}([A-Za-z]+\s*\d+[A-Za-z]*)/,
+    // Simple numbered: "1 Kick", "2 Snare Top"
+    /^(\d{1,2})[\.\):\s]+([A-Za-zÅÄÖåäö]+(?:\s+[A-Za-zÅÄÖåäö]+)?)\s*$/,
+    // Swedish format: "1. Bas-trumma (Beta 52)"
+    /^(\d+)[\.\)]\s*([^(]+)\s*\(([^)]+)\)/,
+    // Compact: "1-Kick-SM91" or "1_Kick_Beta52"
+    /^(\d+)[-_]([A-Za-zÅÄÖåäö]+(?:[-_][A-Za-zÅÄÖåäö]+)?)(?:[-_]([A-Za-z]+\d+))?/,
+    // Mic list format: "SM58: Lead Vox" (extract channel from position)
+    /^([A-Z]{2,}\d*[A-Za-z]*):\s*(.+)/i,
   ];
 
+  let autoChannelNumber = 1;
+  const seenNumbers = new Set<number>();
+
   for (const line of lines) {
+    // Skip header lines
+    if (/^(?:channel|kanal|input|ch|#|nr)\s*(?:instrument|name|mic|mikrofon|description)/i.test(line)) {
+      continue;
+    }
+
     for (const pattern of patterns) {
       const match = line.match(pattern);
       if (match) {
-        const [, numStr, name, mic] = match;
-        const number = parseInt(numStr, 10);
+        let number: number;
+        let name: string;
+        let mic: string | undefined;
 
-        if (number > 0 && number <= 128 && name) {
+        // Handle mic-first format differently
+        if (pattern.source.startsWith('^([A-Z]')) {
+          // Mic list format - use auto-increment
+          number = autoChannelNumber++;
+          mic = match[1];
+          name = match[2].trim();
+        } else {
+          const [, numStr, rawName, rawMic] = match;
+          number = parseInt(numStr, 10);
+          name = rawName?.trim() || '';
+          mic = rawMic?.trim();
+        }
+
+        // Validate
+        if (number > 0 && number <= 128 && name && name.length > 1) {
+          // Skip duplicates
+          if (seenNumbers.has(number)) {
+            continue;
+          }
+          seenNumbers.add(number);
+
           channels.push({
             number,
-            name: name.trim(),
-            microphone: mic?.trim(),
+            name: cleanChannelName(name),
+            microphone: mic ? cleanMicName(mic) : undefined,
             phantom: detectPhantom(name, mic),
             diBox: detectDI(name, line),
+            stand: detectStand(line),
+            notes: extractNotes(line),
           });
           break; // Found a match, move to next line
         }
@@ -92,15 +135,74 @@ function parseChannelsFromText(text: string): RiderChannel[] {
     }
   }
 
-  return channels;
+  // Sort by channel number
+  return channels.sort((a, b) => a.number - b.number);
+}
+
+/**
+ * Clean up channel name
+ */
+function cleanChannelName(name: string): string {
+  return name
+    .replace(/^\s*[-–:]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Clean up microphone name
+ */
+function cleanMicName(mic: string): string {
+  return mic
+    .replace(/^\s*[-–:]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Detect stand type from line
+ */
+function detectStand(line: string): string | undefined {
+  const standPatterns: [RegExp, string][] = [
+    [/\b(boom|galgstativ|galge)\b/i, 'boom'],
+    [/\b(short|kort|low)\s*(boom|stand|stativ)?\b/i, 'short'],
+    [/\b(tall|hög|high)\s*(stand|stativ)?\b/i, 'tall'],
+    [/\b(clip|klämma|rim\s*mount)\b/i, 'clip'],
+    [/\b(floor|golv)\s*(stand|stativ)?\b/i, 'floor'],
+    [/\b(desk|bord)\s*(stand|stativ)?\b/i, 'desk'],
+  ];
+
+  for (const [pattern, stand] of standPatterns) {
+    if (pattern.test(line)) return stand;
+  }
+  return undefined;
+}
+
+/**
+ * Extract notes from line
+ */
+function extractNotes(line: string): string | undefined {
+  // Look for text in parentheses that isn't a microphone
+  const noteMatch = line.match(/\(([^)]+)\)/g);
+  if (noteMatch) {
+    const notes = noteMatch
+      .map(m => m.slice(1, -1))
+      .filter(n => !/^[A-Z]{2,}\d*[A-Za-z]*$/.test(n) && n.length > 3)
+      .join('; ');
+    return notes || undefined;
+  }
+  return undefined;
 }
 
 /**
  * Detect if phantom power is likely needed
  */
 function detectPhantom(name: string, mic?: string): boolean | undefined {
-  const condenserMics = /\b(C414|C451|KM184|SM81|NT5|AT40|MK4|U87|AKG|Neumann|DPA|Schoeps)\b/i;
-  const dynamicMics = /\b(SM57|SM58|Beta|MD421|RE20|e[0-9]+|D112|M88)\b/i;
+  // Known condenser microphones
+  const condenserMics = /\b(C414|C451|C451B|C214|C314|KM184|KM185|KSM141|KSM44|SM81|SM94|NT1|NT5|NT55|AT2020|AT40|AT4050|AT4041|MK4|MKH|U47|U67|U87|TLM|AKG\s*C|Neumann|DPA|Schoeps|4006|4011|4015|4060|Sennheiser\s*MKH|SE\s*Electronics|Rode\s*NT|CMC|Lavalier|Lapel)\b/i;
+
+  // Known dynamic and ribbon microphones (no phantom needed)
+  const dynamicMics = /\b(SM57|SM58|SM7|SM7B|Beta\s*52|Beta\s*58|Beta\s*91|Beta\s*98|MD421|MD441|RE20|RE320|RE16|e602|e604|e609|e614|e906|e935|e945|D112|D12|M88|M201|M160|Super\s*55|PL|D6|D7|ND|Audix\s*D|Audix\s*i5|Audix\s*OM)\b/i;
 
   if (mic) {
     if (condenserMics.test(mic)) return true;
@@ -108,8 +210,12 @@ function detectPhantom(name: string, mic?: string): boolean | undefined {
   }
 
   // Instruments that typically use condenser mics
-  const condenserInstruments = /\b(overhead|oh|hi-?hat|hh|cymbal|ride|acoustic|piano|violin|cello|strings|choir|room)\b/i;
+  const condenserInstruments = /\b(overhead|oh|hi-?hat|hh|cymbal|ride|crash|splash|acoustic|piano|flygel|grand|violin|fiol|cello|viola|strings|stråkar|choir|kör|room|amb|stereo|string\s*section)\b/i;
   if (condenserInstruments.test(name)) return true;
+
+  // Instruments that typically use dynamic mics
+  const dynamicInstruments = /\b(kick|bass\s*drum|bastrumma|snare|virvel|tom|floor|gulvtom|gitarr\s*amp|guitar\s*amp|cab|cabinet)\b/i;
+  if (dynamicInstruments.test(name)) return false;
 
   return undefined;
 }
@@ -118,11 +224,19 @@ function detectPhantom(name: string, mic?: string): boolean | undefined {
  * Detect if DI box is likely needed
  */
 function detectDI(name: string, fullLine: string): boolean | undefined {
-  const diIndicators = /\b(DI|direct|line|keys|keyboard|synth|bass\s*(?:guitar)?|acoustic\s*guitar|akustisk)\b/i;
-  const explicitDI = /\bDI\b/i;
-
+  // Explicit DI indicators
+  const explicitDI = /\b(DI|D\.I\.|direct\s*box)\b/i;
   if (explicitDI.test(fullLine)) return true;
-  if (diIndicators.test(name)) return true;
+
+  // Instruments that typically need DI
+  const diInstruments = /\b(keys|keyboard|tangent|synth|synthesizer|piano\s*L|piano\s*R|elpiano|rhodes|wurli|nord|bass\s*(?:guitar)?|elbas|acoustic\s*guitar|akustisk\s*gitarr|laptop|dator|click|track|backing|playback|stereo\s*in|stereo\s*L|stereo\s*R|USB|iPad)\b/i;
+  if (diInstruments.test(name)) return true;
+
+  // Line level indicators
+  const lineLevelIndicators = /\b(line|linje|stereo|L\/?R|left|right)\b/i;
+  if (lineLevelIndicators.test(fullLine) && !fullLine.match(/line\s*check/i)) {
+    return true;
+  }
 
   return undefined;
 }
